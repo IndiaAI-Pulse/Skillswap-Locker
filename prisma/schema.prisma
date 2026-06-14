@@ -1,0 +1,172 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id              String    @id @default(cuid())
+  name            String?
+  email           String?   @unique
+  emailVerified   DateTime?
+  image           String?
+  credits         Int       @default(100)
+  isOnboarded     Boolean   @default(false)
+  school          String?
+  classYear       String?
+  age             Int?
+  location        String?
+  skillsToTeach   Json?
+  skillsToLearn   Json?
+  preferredDays   Json?
+  teachingMethod  String?
+
+  accounts             Account[]
+  sessions             Session[]
+  teachingSessions     SkillSession[]      @relation("TeacherSessions")
+  learningSessions     SkillSession[]      @relation("LearnerSessions")
+  credentials          Credential[]
+  achievements         Achievement[]
+  feedbackGiven        Feedback[]           @relation("FeedbackGiven")
+  feedbackReceived     Feedback[]           @relation("FeedbackReceived")
+  creditTransactions   CreditTransaction[]
+  messagesSent         Message[]            @relation("MessagesSent")
+  messagesReceived     Message[]            @relation("MessagesReceived")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model SkillSession {
+  id             String    @id @default(cuid())
+  teacherId      String
+  learnerId      String
+  skill          String
+  scheduledAt    DateTime
+  meetLink       String?
+  status         String    @default("pending")
+  teacherConfirm Boolean   @default(false)
+  learnerConfirm Boolean   @default(false)
+  createdAt      DateTime  @default(now())
+
+  teacher    User         @relation("TeacherSessions", fields: [teacherId], references: [id])
+  learner    User         @relation("LearnerSessions", fields: [learnerId], references: [id])
+  credentials Credential[]
+  feedbacks  Feedback[]
+}
+
+
+model Credential {
+  id               String       @id @default(cuid())
+  userId           String
+  sessionId        String
+  role             String       @default("learner") // "learner" or "teacher"
+  skill            String
+  proficiency      String
+  verificationHash String       @unique @default(cuid())
+  issuedAt         DateTime     @default(now())
+  teacherName      String
+  feedbackSummary  String?
+
+  user    User         @relation(fields: [userId], references: [id])
+  session SkillSession @relation(fields: [sessionId], references: [id])
+
+  @@unique([sessionId, role])
+}
+
+model Achievement {
+  id                 String   @id @default(cuid())
+  userId             String
+  title              String
+  organization       String
+  role               String
+  duration           String
+  description        String
+  skillsLearned      Json
+  category           String
+  verificationStatus String   @default("unverified")
+  certificateData    String?  @db.Text
+  certificateType    String?
+  certificateName    String?
+  createdAt          DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+}
+
+model Feedback {
+  id              String   @id @default(cuid())
+  sessionId       String
+  giverId         String
+  receiverId      String
+  punctuality     Int
+  teachingQuality Int
+  contentQuality  Int
+  communication   Int
+  patience        Int
+  preparedness    Int
+  professionalism Int
+  overallExperience Int
+  review          String
+  createdAt       DateTime @default(now())
+
+  session  SkillSession @relation(fields: [sessionId], references: [id])
+  giver    User         @relation("FeedbackGiven",    fields: [giverId],    references: [id])
+  receiver User         @relation("FeedbackReceived", fields: [receiverId], references: [id])
+}
+
+model CreditTransaction {
+  id        String   @id @default(cuid())
+  userId    String
+  amount    Int
+  type      String
+  reason    String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+}
+
+model Message {
+  id         String   @id @default(cuid())
+  senderId   String
+  receiverId String
+  content    String
+  read       Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  sender   User @relation("MessagesSent", fields: [senderId], references: [id])
+  receiver User @relation("MessagesReceived", fields: [receiverId], references: [id])
+}

@@ -9,17 +9,27 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@auth/prisma-adapter": "^2.11.2",
+    "@google/generative-ai": "^0.24.1",
+    "@prisma/client": "^6.4.0",
+    "@splinetool/react-spline": "^4.1.0",
+    "mysql2": "^3.22.3",
     "next": "16.2.6",
+    "next-auth": "^4.24.14",
+    "openai": "^6.42.0",
     "react": "19.2.4",
     "react-dom": "19.2.4"
   },
   "devDependencies": {
+    "@prisma/adapter-pg": "^7.8.0",
+    "@prisma/extension-optimize": "^2.0.1",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.2.6",
+    "prisma": "^6.4.0",
     "tailwindcss": "^4",
     "typescript": "^5"
   }
