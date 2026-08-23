@@ -2,9 +2,9 @@
 import { getServerSession } from "next-auth";
 import { prisma } from "@/lib/prisma";
 import OnboardingForm from "@/components/OnboardingForm";
-import DashboardLayout from "@/components/DashboardLayout";
+import DashboardLayout, { DashboardUser, SkillItem } from "@/components/DashboardLayout";
 import { revalidatePath } from "next/cache";
-import { LoginButton } from "@/components/LoginButton"; // Ek chota inline button component
+import { LoginButton } from "@/components/LoginButton";
 
 export default async function Home() {
   const session = await getServerSession();
@@ -48,22 +48,21 @@ export default async function Home() {
   }
 
   // 3. STATE III: User fully Onboarded hai -> Bhejo directly complete Sidebar Playground Application par!
-  // CRITICAL FIX: Injected dbUser.id explicitly so Dashboard and AI Matchmaking tabs get direct context alignment.
-const mappedUser = {
-  id: dbUser.id,
-  name: dbUser.name || "User",
-  email: dbUser.email || "",
-  image: dbUser.image || undefined,
-  school: dbUser.school || undefined,
-  classYear: dbUser.classYear || undefined,
-  age: dbUser.age || undefined,
-  location: dbUser.location || undefined,
-  credits: dbUser.credits || 100,
-  skillsToTeach: dbUser.skillsToTeach,
-  skillsToLearn: dbUser.skillsToLearn,
-  teachingMethod: dbUser.teachingMethod || undefined,
-  preferredDays: dbUser.preferredDays || [],
-};
+  const mappedUser: DashboardUser = {
+    id: dbUser.id,
+    name: dbUser.name || "User",
+    email: dbUser.email || "",
+    image: dbUser.image || undefined,
+    school: dbUser.school || undefined,
+    classYear: dbUser.classYear || undefined,
+    age: dbUser.age || undefined,
+    location: dbUser.location || undefined,
+    credits: dbUser.credits || 100,
+    skillsToTeach: (dbUser.skillsToTeach ?? "") as string | SkillItem[],
+    skillsToLearn: (dbUser.skillsToLearn ?? "") as string | SkillItem[],
+    teachingMethod: dbUser.teachingMethod || undefined,
+    preferredDays: (dbUser.preferredDays ?? []) as string[],
+  };
 
   return <DashboardLayout user={mappedUser} />;
 }

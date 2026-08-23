@@ -2,14 +2,28 @@
 
 import { useState, useRef, useEffect } from "react";
 
-interface SlyxChatProps {
+export interface SlyxChatProps {
   userId: string;
   open: boolean;
   onClose: () => void;
+  contextData?: {
+    user?: any;
+    skillsToTeach?: any[];
+    skillsToLearn?: any[];
+    credits?: number;
+    portfolioScore?: any;
+  };
 }
 
-export default function SlyxChat({ userId, open, onClose }: SlyxChatProps) {
-  const [messages, setMessages] = useState<{ role: "user" | "model"; text: string }[]>([]);
+export default function SlyxChat({
+  userId,
+  open,
+  onClose,
+  contextData,
+}: SlyxChatProps) {
+  const [messages, setMessages] = useState<
+    { role: "user" | "model"; text: string }[]
+  >([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -23,7 +37,10 @@ export default function SlyxChat({ userId, open, onClose }: SlyxChatProps) {
     const userMsg = input.trim();
     setInput("");
 
-    const updatedHistory = [...messages, { role: "user" as const, text: userMsg }];
+    const updatedHistory = [
+      ...messages,
+      { role: "user" as const, text: userMsg },
+    ];
     setMessages(updatedHistory);
     setLoading(true);
 
@@ -31,19 +48,36 @@ export default function SlyxChat({ userId, open, onClose }: SlyxChatProps) {
       const res = await fetch("/api/slyx-chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId, message: userMsg, history: messages }),
+        body: JSON.stringify({
+          userId,
+          message: userMsg,
+          history: messages,
+          contextData, // Context sent to backend API
+        }),
       });
 
       const data = await res.json();
       if (data.error) {
         console.error("SLYX error:", data.error);
-        setMessages(prev => [...prev, { role: "model", text: "Hmm, something went wrong on my end. Mind trying again?" }]);
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: "model",
+            text: "Hmm, something went wrong on my end. Mind trying again?",
+          },
+        ]);
       } else {
-        setMessages(prev => [...prev, { role: "model", text: data.reply }]);
+        setMessages((prev) => [...prev, { role: "model", text: data.reply }]);
       }
     } catch (err) {
       console.error("SLYX fetch error:", err);
-      setMessages(prev => [...prev, { role: "model", text: "I couldn't connect just now. Try again in a moment!" }]);
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "model",
+          text: "I couldn't connect just now. Try again in a moment!",
+        },
+      ]);
     } finally {
       setLoading(false);
     }
@@ -61,22 +95,35 @@ export default function SlyxChat({ userId, open, onClose }: SlyxChatProps) {
             <p className="text-[10px] text-zinc-400 font-mono">Your study buddy</p>
           </div>
         </div>
-        <button onClick={onClose} className="text-zinc-500 hover:text-white text-sm">✕</button>
+        <button
+          onClick={onClose}
+          className="text-zinc-500 hover:text-white text-sm"
+        >
+          ✕
+        </button>
       </div>
 
       <div className="flex-1 overflow-y-auto p-3 space-y-3">
         {messages.length === 0 && (
           <div className="bg-white/[0.03] border border-white/10 rounded-2xl rounded-bl-sm px-4 py-2.5 text-xs text-zinc-300 max-w-[85%]">
-            Hey! 🦊 I can see your real dashboard data — ask me about your credits, skills, credentials, or sessions!
+            Hey! 🦊 I can see your real dashboard data — ask me about your
+            credits, skills, credentials, or sessions!
           </div>
         )}
         {messages.map((msg, i) => (
-          <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
-            <div className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-xs leading-relaxed ${
-              msg.role === "user"
-                ? "bg-gradient-to-r from-purple-600/80 to-indigo-600/80 text-white rounded-br-sm"
-                : "bg-white/[0.03] border border-white/10 text-zinc-200 rounded-bl-sm"
-            }`}>
+          <div
+            key={i}
+            className={`flex ${
+              msg.role === "user" ? "justify-end" : "justify-start"
+            }`}
+          >
+            <div
+              className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-xs leading-relaxed ${
+                msg.role === "user"
+                  ? "bg-gradient-to-r from-purple-600/80 to-indigo-600/80 text-white rounded-br-sm"
+                  : "bg-white/[0.03] border border-white/10 text-zinc-200 rounded-bl-sm"
+              }`}
+            >
               {msg.text}
             </div>
           </div>
@@ -84,9 +131,18 @@ export default function SlyxChat({ userId, open, onClose }: SlyxChatProps) {
         {loading && (
           <div className="flex justify-start">
             <div className="bg-white/[0.03] border border-white/10 rounded-2xl rounded-bl-sm px-4 py-2.5 text-xs text-zinc-400 flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
-              <span className="w-1.5 h-1.5 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
-              <span className="w-1.5 h-1.5 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
+              <span
+                className="w-1.5 h-1.5 bg-purple-400 rounded-full animate-bounce"
+                style={{ animationDelay: "0ms" }}
+              />
+              <span
+                className="w-1.5 h-1.5 bg-purple-400 rounded-full animate-bounce"
+                style={{ animationDelay: "150ms" }}
+              />
+              <span
+                className="w-1.5 h-1.5 bg-purple-400 rounded-full animate-bounce"
+                style={{ animationDelay: "300ms" }}
+              />
             </div>
           </div>
         )}

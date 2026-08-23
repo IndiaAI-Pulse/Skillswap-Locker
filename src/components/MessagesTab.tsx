@@ -1,8 +1,13 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { sendMessage, getConversation, markMessagesRead, getConversationsList } from "@/actions/messages";
-import { getConnectedUsers } from "@/actions/profile";
+import {
+  sendMessage,
+  getConversation,
+  markMessagesRead,
+  getConversationsList,
+  getMessageableUsers,
+} from "@/actions/messages";
 
 interface MessagesTabProps {
   user: { id: string; name: string };
@@ -11,17 +16,16 @@ interface MessagesTabProps {
 
 export default function MessagesTab({ user, initialSelectedUserId }: MessagesTabProps) {
   const [conversations, setConversations] = useState<any[]>([]);
-  const [connectedUsers, setConnectedUsers] = useState<any[]>([]);
+  const [messageableUsers, setMessageableUsers] = useState<any[]>([]);
   const [selectedUser, setSelectedUser] = useState<any | null>(null);
   const [messages, setMessages] = useState<any[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    loadInitial();
-  }, []);
+  useEffect(() => { loadInitial(); }, []);
 
   useEffect(() => {
     if (selectedUser) {
@@ -39,16 +43,17 @@ export default function MessagesTab({ user, initialSelectedUserId }: MessagesTab
   const loadInitial = async () => {
     setLoading(true);
     try {
-      const [convos, connected] = await Promise.all([
+      const [convos, messageable] = await Promise.all([
         getConversationsList(user.id),
-        getConnectedUsers(user.id),
+        getMessageableUsers(user.id),
       ]);
       setConversations(convos);
-      setConnectedUsers(connected);
+      setMessageableUsers(messageable);
 
       if (initialSelectedUserId) {
-        const target = connected.find((u: any) => u.id === initialSelectedUserId)
-          || convos.find((c: any) => c.user.id === initialSelectedUserId)?.user;
+        const target =
+          messageable.find((u: any) => u.id === initialSelectedUserId) ||
+          convos.find((c: any) => c.user.id === initialSelectedUserId)?.user;
         if (target) setSelectedUser(target);
       } else if (convos.length > 0) {
         setSelectedUser(convos[0].user);
@@ -76,11 +81,17 @@ export default function MessagesTab({ user, initialSelectedUserId }: MessagesTab
   const handleSend = async () => {
     if (!input.trim() || !selectedUser) return;
     setSending(true);
+    setSendError(null);
     const content = input.trim();
     setInput("");
     try {
-      await sendMessage(user.id, selectedUser.id, content);
-      await loadConversation(selectedUser.id);
+      const result = await sendMessage(user.id, selectedUser.id, content);
+      if (result.error) {
+        setSendError(result.error);
+        setInput(content);
+      } else {
+        await loadConversation(selectedUser.id);
+      }
     } catch (err) {
       console.error(err);
     } finally {
@@ -88,10 +99,15 @@ export default function MessagesTab({ user, initialSelectedUserId }: MessagesTab
     }
   };
 
-  // Combine: people with existing conversations + connected users not yet messaged
+  // Contacts = users with existing conversations + messageable users not yet messaged
   const allContacts = [
-    ...conversations.map(c => ({ ...c.user, lastMessage: c.lastMessage, unreadCount: c.unreadCount, lastMessageAt: c.lastMessageAt })),
-    ...connectedUsers
+    ...conversations.map(c => ({
+      ...c.user,
+      lastMessage: c.lastMessage,
+      unreadCount: c.unreadCount,
+      lastMessageAt: c.lastMessageAt,
+    })),
+    ...messageableUsers
       .filter(u => !conversations.some(c => c.user.id === u.id))
       .map(u => ({ ...u, lastMessage: null, unreadCount: 0, lastMessageAt: null })),
   ];
@@ -110,11 +126,12 @@ export default function MessagesTab({ user, initialSelectedUserId }: MessagesTab
 
         {/* CONTACT LIST */}
         <div className="bg-white/[0.02] border border-white/10 rounded-2xl p-3 overflow-y-auto space-y-1.5">
-          <h3 className="text-xs font-bold font-mono uppercase tracking-widest text-zinc-400 px-2 py-2">💬 Conversations</h3>
+          <h3 className="text-xs font-bold font-mono uppercase tracking-widest text-zinc-400 px-2 py-2">💬 Chats</h3>
           {allContacts.length === 0 ? (
-            <p className="text-xs text-zinc-600 font-mono text-center py-8 px-2">
-              No connections yet. Match with peers via AI Matchmaking to start chatting.
-            </p>
+            <div className="text-center py-8 px-3 space-y-2">
+              <p className="text-xs text-zinc-500 font-mono">No connections yet.</p>
+              <p className="text-[10px] text-zinc-600 font-mono">You can only message users you've matched with or booked sessions with. Go to AI Matchmaking to find peers!</p>
+            </div>
           ) : (
             allContacts.map((contact) => (
               <button
@@ -155,7 +172,10 @@ export default function MessagesTab({ user, initialSelectedUserId }: MessagesTab
                 <div className="w-9 h-9 rounded-full bg-zinc-900 border-2 border-purple-500/40 flex items-center justify-center text-xs font-bold text-purple-300">
                   {selectedUser.name?.charAt(0).toUpperCase()}
                 </div>
-                <h4 className="text-sm font-bold text-white">{selectedUser.name}</h4>
+                <div>
+                  <h4 className="text-sm font-bold text-white">{selectedUser.name}</h4>
+                  <p className="text-[10px] text-zinc-500 font-mono">Matched peer</p>
+                </div>
               </div>
 
               <div className="flex-1 overflow-y-auto p-4 space-y-3">
@@ -185,12 +205,18 @@ export default function MessagesTab({ user, initialSelectedUserId }: MessagesTab
                 <div ref={bottomRef} />
               </div>
 
+              {sendError && (
+                <div className="px-3 py-2 bg-red-500/10 border-t border-red-500/20">
+                  <p className="text-[11px] text-red-400 font-mono">⚠️ {sendError}</p>
+                </div>
+              )}
+
               <div className="p-3 border-t border-white/5 flex gap-2">
                 <input
                   type="text"
                   placeholder="Type a message..."
                   value={input}
-                  onChange={(e) => setInput(e.target.value)}
+                  onChange={(e) => { setInput(e.target.value); setSendError(null); }}
                   onKeyDown={(e) => e.key === "Enter" && handleSend()}
                   className="flex-1 bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white outline-none focus:border-purple-500/50"
                 />
@@ -199,13 +225,14 @@ export default function MessagesTab({ user, initialSelectedUserId }: MessagesTab
                   disabled={sending || !input.trim()}
                   className="px-4 py-2.5 bg-gradient-to-r from-purple-600 to-cyan-600 hover:from-purple-500 hover:to-cyan-500 disabled:from-zinc-800 disabled:to-zinc-800 text-white text-xs font-bold rounded-xl transition-all"
                 >
-                  Send
+                  {sending ? "..." : "Send"}
                 </button>
               </div>
             </>
           ) : (
-            <div className="flex-1 flex items-center justify-center text-xs text-zinc-600 font-mono">
-              Pick a chat to get started
+            <div className="flex-1 flex flex-col items-center justify-center gap-3 text-center p-8">
+              <span className="text-3xl">💬</span>
+              <p className="text-xs text-zinc-500 font-mono">Select a conversation or match with a peer to start chatting</p>
             </div>
           )}
         </div>

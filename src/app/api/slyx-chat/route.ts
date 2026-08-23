@@ -58,7 +58,7 @@ USER PROFILE:
 CREDITS:
 - Current balance: ${credits.balance}
 - Recent transactions: ${credits.transactions.length > 0
-    ? credits.transactions.slice(0, 5).map(t => `${t.reason} (${t.type === "earn" ? "+" : "-"}${t.amount})`).join("; ")
+    ? credits.transactions.slice(0, 5).map((t: any) => `${t.reason} (${t.type === "earn" ? "+" : "-"}${t.amount})`).join("; ")
     : "None yet"}
 
 PORTFOLIO SCORE: ${portfolio.score}/100
@@ -72,11 +72,11 @@ SKILLS TO TEACH: ${teachSkills.length > 0 ? teachSkills.map((s: any) => `${s.ski
 SKILLS TO LEARN: ${learnSkills.length > 0 ? learnSkills.map((s: any) => `${s.skill} (${s.level})`).join(", ") : "None added yet"}
 
 VERIFIED CREDENTIALS: ${credentials.length > 0
-    ? credentials.map(c => `${c.skill} — ${c.proficiency} (${c.role === "teacher" ? "as teacher" : "as learner"})`).join("; ")
+    ? credentials.map((c: any) => `${c.skill} — ${c.proficiency} (${c.role === "teacher" ? "as teacher" : "as learner"})`).join("; ")
     : "None earned yet"}
 
 ACHIEVEMENTS LOGGED: ${achievements.length > 0
-    ? achievements.map(a => `${a.title} at ${a.organization}`).join("; ")
+    ? achievements.map((a: any) => `${a.title} at ${a.organization}`).join("; ")
     : "None logged yet"}
 
 UPCOMING SESSIONS: ${upcomingSessions.length > 0
@@ -111,10 +111,10 @@ RULES:
     formattedMessages.push({ role: "user", content: message });
 
     const response = await groq.chat.completions.create({
-      model: "llama-3.1-8b-instant",
+      model: "openai/gpt-oss-20b",
       messages: formattedMessages,
       temperature: 0.4,
-      max_tokens: 200,
+      max_tokens: 300,
     });
 
     const reply = response.choices[0]?.message?.content?.trim() || "Hmm, I've got nothing — try asking again?";

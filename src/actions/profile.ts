@@ -36,9 +36,7 @@ export async function updateProfile(data: {
 
 export async function getConnectedUsers(userId: string) {
   const sessions = await prisma.skillSession.findMany({
-    where: {
-      OR: [{ teacherId: userId }, { learnerId: userId }],
-    },
+    where: { OR: [{ teacherId: userId }, { learnerId: userId }] },
     include: {
       teacher: { select: { id: true, name: true, skillsToTeach: true } },
       learner: { select: { id: true, name: true, skillsToLearn: true } },

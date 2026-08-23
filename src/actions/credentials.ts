@@ -322,24 +322,25 @@ export async function submitFeedback(data: {
 }
 
 export async function getUserFeedback(userId: string) {
-  const [received, given] = await Promise.all([
-    prisma.feedback.findMany({
-      where: { receiverId: userId },
-      include: {
-        giver: { select: { name: true, image: true } },
-        session: { select: { skill: true, scheduledAt: true } },
-      },
-      orderBy: { createdAt: "desc" },
-    }),
-    prisma.feedback.findMany({
-      where: { giverId: userId },
-      include: {
-        receiver: { select: { name: true, image: true } },
-        session: { select: { skill: true, scheduledAt: true } },
-      },
-      orderBy: { createdAt: "desc" },
-    }),
-  ]);
+  // Executed sequentially to prevent prepared statement collisions over poolers
+  const received = await prisma.feedback.findMany({
+    where: { receiverId: userId },
+    include: {
+      giver: { select: { name: true, image: true } },
+      session: { select: { skill: true, scheduledAt: true } },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
+  const given = await prisma.feedback.findMany({
+    where: { giverId: userId },
+    include: {
+      receiver: { select: { name: true, image: true } },
+      session: { select: { skill: true, scheduledAt: true } },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
   return { received, given };
 }
 
@@ -368,18 +369,17 @@ export async function getUserCredits(userId: string) {
 // ── PORTFOLIO STRENGTH SCORE ──────────────────────────────
 
 export async function getPortfolioScore(userId: string) {
-  const [credentials, achievements, feedbacks, sessions] = await Promise.all([
-    prisma.credential.count({ where: { userId } }),
-    prisma.achievement.count({ where: { userId } }),
-    prisma.feedback.findMany({ where: { receiverId: userId } }),
-    prisma.skillSession.count({
-      where: {
-        OR: [{ teacherId: userId }, { learnerId: userId }],
-        status: { in: ["confirmed", "completed"] },
-        scheduledAt: { lt: new Date(Date.now() - 60 * 60 * 1000) },
-      },
-    }),
-  ]);
+  // Executed sequentially to prevent prepared statement collisions over poolers
+  const credentials = await prisma.credential.count({ where: { userId } });
+  const achievements = await prisma.achievement.count({ where: { userId } });
+  const feedbacks = await prisma.feedback.findMany({ where: { receiverId: userId } });
+  const sessions = await prisma.skillSession.count({
+    where: {
+      OR: [{ teacherId: userId }, { learnerId: userId }],
+      status: { in: ["confirmed", "completed"] },
+      scheduledAt: { lt: new Date(Date.now() - 60 * 60 * 1000) },
+    },
+  });
 
   const avgFeedback =
     feedbacks.length > 0
@@ -397,4 +397,52 @@ export async function getPortfolioScore(userId: string) {
   const score = Math.round(credScore + achScore + sessScore + feedScore);
 
   return { score, credentials, achievements, sessions, feedbackCount: feedbacks.length };
+}
+
+// ── LEADERBOARD ───────────────────────────────────────────
+
+export async function getLeaderboard() {
+  const users = await prisma.user.findMany({
+    where: { isOnboarded: true },
+    select: {
+      id: true,
+      name: true,
+      school: true,
+      classYear: true,
+      image: true,
+      credits: true,
+      credentials: { select: { id: true } },
+      achievements: { select: { id: true } },
+      feedbackReceived: {
+        select: {
+          punctuality: true, teachingQuality: true, contentQuality: true,
+          communication: true, patience: true, preparedness: true,
+          professionalism: true, overallExperience: true,
+        },
+      },
+      teachingSessions: { where: { status: { in: ["confirmed", "completed"] }, scheduledAt: { lt: new Date(Date.now() - 60 * 60 * 1000) } }, select: { id: true } },
+      learningSessions: { where: { status: { in: ["confirmed", "completed"] }, scheduledAt: { lt: new Date(Date.now() - 60 * 60 * 1000) } }, select: { id: true } },
+    },
+  });
+
+  const scored = users.map(u => {
+    const credentials = u.credentials.length;
+    const achievements = u.achievements.length;
+    const sessions = u.teachingSessions.length + u.learningSessions.length;
+    const feedbacks = u.feedbackReceived;
+    const avgFeedback = feedbacks.length > 0
+      ? feedbacks.reduce((sum, f) => sum + (f.punctuality + f.teachingQuality + f.contentQuality + f.communication + f.patience + f.preparedness + f.professionalism + f.overallExperience) / 8, 0) / feedbacks.length
+      : 0;
+
+    const score = Math.round(
+      Math.min(credentials / 5, 1) * 40 +
+      Math.min(achievements / 5, 1) * 30 +
+      Math.min(sessions / 10, 1) * 20 +
+      (Math.min(avgFeedback, 5) / 5) * 10
+    );
+
+    return { id: u.id, name: u.name, school: u.school, classYear: u.classYear, image: u.image, credits: u.credits, score, credentials, achievements, sessions };
+  });
+
+  return scored.sort((a, b) => b.score - a.score).slice(0, 20);
 }
