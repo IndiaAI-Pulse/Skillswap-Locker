@@ -1,36 +1,55 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+#🔐Skillswap Locker
 
-## Getting Started
+### Learn.Teach.Validate.Grow.
+Skillswap Locker is a peer-to-peer skill learning platform designed around a simple idea:
 
-First, run the development server:
+> **Your skills become more valuable when you can learn them, teach them, and prove them through real interaction.**
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+Instead of treating learning as a one-way process, Skillswap Locker creates a collaborative ecosystem where users can **learn from others, teach what they know, exchange credits, track their skill development, and build evidence of practical learning.**
+---
+## 🚀 Why Skillswap Locker?
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+The traditional learning journey often looks like:
+**Learn → Take an assessment → Get a score → Move on**
+But real-world skill development is rarely that linear.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Someone may understand Python but struggle with projects.  
+Someone else may know UI/UX but need help with frontend development.  
+Another person may have strong industry experience but want to learn something completely new.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Skillswap Locker connects these people.
 
-## Learn More
+### The core idea
+**Learn from people. Teach what you know. Exchange value. Build evidence.**
+---
+# ✨ Key Features
+## 👤 Skill Profiles
 
-To learn more about Next.js, take a look at the following resources:
+Users can build profiles around the skills they actually possess and the skills they want to develop.
+Profiles can represent:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- Skills
+- Skill levels
+- Learning goals
+- Teaching capabilities
+- Learning activity
+- Peer interactions
+- Skill-development evidence
+---
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## 🔄 Peer-to-Peer Learning
+Skillswap Locker enables users to become both:
 
-## Deploy on Vercel
+**Teacher + Learner**
+A user can teach one skill while learning another.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+For example:
+```text
+Arshia
+   │
+   ├── Teaches → Python
+   │
+   └── Learns  ← UI/UX Design
+                    │
+                    ▼
+                 Another User
