@@ -1,3 +1,4 @@
+// Path: src/actions/contentReview.ts
 "use server";
 
 import { prisma } from "@/lib/prisma";
@@ -23,22 +24,23 @@ export type ReviewResult = {
 };
 
 // ── SKILL READINESS ───────────────────────────────────────
-
 export async function reviewSkillContent(skill: string, level: string): Promise<ReviewResult> {
-  const issues: ReviewIssue[] = [];
-  const suggestions: string[] = [];
   const trimmed = skill.trim();
 
   // Basic completeness — these are facts, not AI's job
   if (!trimmed || trimmed.length < 2) {
     return {
-      status: "invalid", score: 0, passed: false,
+      status: "invalid",
+      score: 0,
+      passed: false,
       issues: [{ field: "skill", message: "Skill name is too short", severity: "error" }],
     };
   }
   if (!level) {
     return {
-      status: "invalid", score: 0, passed: false,
+      status: "invalid",
+      score: 0,
+      passed: false,
       issues: [{ field: "level", message: "Please select a level", severity: "error" }],
     };
   }
@@ -47,7 +49,9 @@ export async function reviewSkillContent(skill: string, level: string): Promise<
   const isGarbage = /^[^a-zA-Z]+$/.test(trimmed) || /^(.)\1{3,}$/.test(trimmed) || trimmed.length > 80;
   if (isGarbage) {
     return {
-      status: "invalid", score: 0, passed: false,
+      status: "invalid",
+      score: 0,
+      passed: false,
       issues: [{ field: "skill", message: "This doesn't look like a valid skill name", severity: "error" }],
     };
   }
@@ -55,7 +59,6 @@ export async function reviewSkillContent(skill: string, level: string): Promise<
   // AI does the real semantic analysis
   try {
     const prompt = `You are a skill validator for a student peer-learning platform called SkillSwap Locker.
-
 A student wants to add this skill to their profile:
 Skill: "${trimmed}"
 Level: "${level}"
@@ -79,16 +82,13 @@ Rules:
 - issues: list only real problems. Do NOT add fake issues. If the skill is valid and specific, issues should be empty [].
 - suggestions: only if not specific — suggest 2-3 more specific alternatives. Empty [] if skill is already specific.
 - score: 0-100 readiness score. 100 = perfect. Deduct 40 for invalid, 25 for not specific, 15 for level inconsistency. If no issues, score is 100.
-
 Be honest and dynamic. Do NOT hardcode responses. Analyze the actual skill name given.`;
 
     const response = await groq.chat.completions.create({
       model: "llama-3.1-8b-instant",
       max_tokens: 300,
       temperature: 0.1,
-      messages: [
-        { role: "user", content: prompt },
-      ],
+      messages: [{ role: "user", content: prompt }],
     });
 
     const raw = response.choices[0]?.message?.content?.trim() || "{}";
@@ -98,8 +98,7 @@ Be honest and dynamic. Do NOT hardcode responses. Analyze the actual skill name 
     const score = typeof parsed.score === "number" ? Math.max(0, Math.min(100, parsed.score)) : 70;
     const aiIssues: ReviewIssue[] = Array.isArray(parsed.issues) ? parsed.issues : [];
     const aiSuggestions: string[] = Array.isArray(parsed.suggestions) ? parsed.suggestions : [];
-
-    const errors = aiIssues.filter(i => i.severity === "error").length;
+    const errors = aiIssues.filter((i) => i.severity === "error").length;
     const status: ReviewResult["status"] = errors > 0 ? "invalid" : aiIssues.length > 0 ? "needs_review" : "ready";
 
     return {
@@ -109,7 +108,6 @@ Be honest and dynamic. Do NOT hardcode responses. Analyze the actual skill name 
       suggestions: aiSuggestions,
       passed: errors === 0,
     };
-
   } catch (err) {
     console.error("AI skill review failed:", err);
     // Fallback — if AI fails, allow it through with a warning
@@ -124,7 +122,6 @@ Be honest and dynamic. Do NOT hardcode responses. Analyze the actual skill name 
 }
 
 // ── MEET LINK READINESS ───────────────────────────────────
-
 const MEET_PATTERN = /^https:\/\/meet\.google\.com\/[a-z0-9]+-[a-z0-9]+-[a-z0-9]+(\?.*)?$/;
 const ZOOM_PATTERN = /^https:\/\/([\w-]+\.)?zoom\.us\/j\/\d+/;
 const TEAMS_PATTERN = /^https:\/\/teams\.microsoft\.com\/l\/meetup-join\//;
@@ -138,13 +135,14 @@ export async function reviewMeetLink(link: string): Promise<ReviewResult> {
   }
 
   const issues: ReviewIssue[] = [];
-
   let url: URL;
   try {
     url = new URL(trimmed);
   } catch {
     return {
-      status: "invalid", score: 0, passed: false,
+      status: "invalid",
+      score: 0,
+      passed: false,
       issues: [{ field: "meetLink", message: "This doesn't look like a valid URL — it should start with https://", severity: "error" }],
     };
   }
@@ -159,19 +157,35 @@ export async function reviewMeetLink(link: string): Promise<ReviewResult> {
 
   if (!isGoogleMeet && !isZoom && !isTeams) {
     return {
-      status: "invalid", score: 0, passed: false,
-      issues: [{ field: "meetLink", message: `"${url.hostname}" is not a supported platform — use Google Meet (meet.google.com), Zoom (zoom.us), or Microsoft Teams`, severity: "error" }],
+      status: "invalid",
+      score: 0,
+      passed: false,
+      issues: [
+        {
+          field: "meetLink",
+          message: `"${url.hostname}" is not a supported platform — use Google Meet (meet.google.com), Zoom (zoom.us), or Microsoft Teams`,
+          severity: "error",
+        },
+      ],
     };
   }
 
   if (isGoogleMeet) {
     const path = url.pathname;
     if (!path || path === "/" || path.length < 5) {
-      issues.push({ field: "meetLink", message: "Google Meet link is incomplete — copy the full link including the meeting code (e.g. https://meet.google.com/abc-defg-hij)", severity: "error" });
+      issues.push({
+        field: "meetLink",
+        message: "Google Meet link is incomplete — copy the full link including the meeting code (e.g. https://meet.google.com/abc-defg-hij)",
+        severity: "error",
+      });
     } else if (!MEET_PATTERN.test(trimmed.split("?")[0] + (url.search ? "?" + url.search : ""))) {
       // Lenient — if path exists but doesn't match exactly, just warn
       if (path.split("/").filter(Boolean).length === 0) {
-        issues.push({ field: "meetLink", message: "Google Meet link appears incomplete — make sure to copy the full link from Google Meet", severity: "warning" });
+        issues.push({
+          field: "meetLink",
+          message: "Google Meet link appears incomplete — make sure to copy the full link from Google Meet",
+          severity: "warning",
+        });
       }
     }
   }
@@ -180,8 +194,8 @@ export async function reviewMeetLink(link: string): Promise<ReviewResult> {
     issues.push({ field: "meetLink", message: "Zoom link format looks unusual — expected: https://zoom.us/j/[meeting-id]", severity: "warning" });
   }
 
-  const errors = issues.filter(i => i.severity === "error").length;
-  const warnings = issues.filter(i => i.severity === "warning").length;
+  const errors = issues.filter((i) => i.severity === "error").length;
+  const warnings = issues.filter((i) => i.severity === "warning").length;
   const score = Math.max(0, 100 - errors * 50 - warnings * 20);
   const status: ReviewResult["status"] = errors > 0 ? "invalid" : warnings > 0 ? "needs_review" : "ready";
 
@@ -189,7 +203,6 @@ export async function reviewMeetLink(link: string): Promise<ReviewResult> {
 }
 
 // ── SESSION READINESS ─────────────────────────────────────
-
 export async function reviewSessionContent(data: {
   skill: string;
   learnerId: string;
@@ -216,7 +229,11 @@ export async function reviewSessionContent(data: {
       }
       const daysUntil = (scheduled.getTime() - Date.now()) / (1000 * 60 * 60 * 24);
       if (daysUntil > 60) {
-        issues.push({ field: "date", message: "Session is more than 60 days away — consider scheduling sooner so learners stay engaged", severity: "warning" });
+        issues.push({
+          field: "date",
+          message: "Session is more than 60 days away — consider scheduling sooner so learners stay engaged",
+          severity: "warning",
+        });
       }
 
       // Weekly limit
@@ -235,7 +252,11 @@ export async function reviewSessionContent(data: {
         });
 
         if (count >= 3) {
-          issues.push({ field: "date", message: "You've already booked 3 sessions this week — the maximum allowed. Choose a date in a different week", severity: "error" });
+          issues.push({
+            field: "date",
+            message: "You've already booked 3 sessions this week — the maximum allowed. Choose a date in a different week",
+            severity: "error",
+          });
         }
       }
     }
@@ -247,10 +268,123 @@ export async function reviewSessionContent(data: {
     issues.push(...linkReview.issues);
   }
 
-  const errors = issues.filter(i => i.severity === "error").length;
-  const warnings = issues.filter(i => i.severity === "warning").length;
+  const errors = issues.filter((i) => i.severity === "error").length;
+  const warnings = issues.filter((i) => i.severity === "warning").length;
   const score = Math.max(0, 100 - errors * 35 - warnings * 10);
   const status: ReviewResult["status"] = errors > 0 ? "invalid" : warnings > 0 ? "needs_review" : "ready";
 
   return { status, score, issues, suggestions, passed: errors === 0 };
+}
+
+// ── ACHIEVEMENT READINESS ─────────────────────────────────
+export async function reviewAchievementContent(data: {
+  title: string;
+  description: string;
+  organization?: string;
+  role?: string;
+  skillsLearned: string[];
+}): Promise<ReviewResult> {
+  const title = (data.title || "").trim();
+  const description = (data.description || "").trim();
+  const skillsLearned = data.skillsLearned || [];
+
+  // Basic completeness — facts, not AI's job
+  if (!title || title.length < 2) {
+    return {
+      status: "invalid",
+      score: 0,
+      passed: false,
+      issues: [{ field: "title", message: "Achievement title is too short", severity: "error" }],
+    };
+  }
+  if (!description || description.length < 15) {
+    return {
+      status: "invalid",
+      score: 0,
+      passed: false,
+      issues: [{ field: "description", message: "Description is too short — add a bit more detail about what you did", severity: "error" }],
+    };
+  }
+  if (skillsLearned.length === 0) {
+    return {
+      status: "invalid",
+      score: 0,
+      passed: false,
+      issues: [{ field: "skillsLearned", message: "Add at least one skill you learned or used", severity: "error" }],
+    };
+  }
+
+  // Garbage detection — pure pattern, no AI needed
+  const isGarbage = /^[^a-zA-Z]+$/.test(description) || /^(.)\1{5,}$/.test(description);
+  if (isGarbage) {
+    return {
+      status: "invalid",
+      score: 0,
+      passed: false,
+      issues: [{ field: "description", message: "This description doesn't look like real content", severity: "error" }],
+    };
+  }
+
+  // AI does the semantic analysis
+  try {
+    const prompt = `You are a content validator for a student peer-learning platform called SkillSwap Locker.
+A student is logging an achievement to their portfolio.
+
+Title: "${title}"
+Organization/Context: "${data.organization || "Not specified"}"
+Their role: "${data.role || "Not specified"}"
+Description: "${description}"
+Skills they claim to have learned/used: ${JSON.stringify(skillsLearned)}
+
+Respond ONLY with valid JSON in this exact format:
+{
+  "plausible": true/false,
+  "descriptionSubstantive": true/false,
+  "skillsSupported": true/false,
+  "issues": [
+    { "field": "description", "severity": "error|warning", "message": "..." }
+  ],
+  "score": 0-100
+}
+
+Rules:
+- plausible: does this read like a real achievement, not spam or nonsense?
+- descriptionSubstantive: does the description actually explain what they did, not just restate the title?
+- skillsSupported: do the claimed skills reasonably connect to what's described? Soft skills like "leadership", "public speaking", or "confidence" are valid even if not literally named in the description, as long as the achievement context supports them.
+- issues: list only real problems. Empty [] if everything looks fine.
+- score: 0-100. Deduct 40 for implausible, 25 for a thin/non-substantive description, 15 for unsupported skills. 100 if no issues.
+Be honest and dynamic — do NOT hardcode responses, analyze the actual content given.`;
+
+    const response = await groq.chat.completions.create({
+      model: "llama-3.1-8b-instant",
+      max_tokens: 300,
+      temperature: 0.1,
+      messages: [{ role: "user", content: prompt }],
+    });
+
+    const raw = response.choices[0]?.message?.content?.trim() || "{}";
+    const clean = raw.replace(/```json|```/g, "").trim();
+    const parsed = JSON.parse(clean);
+
+    const score = typeof parsed.score === "number" ? Math.max(0, Math.min(100, parsed.score)) : 70;
+    const aiIssues: ReviewIssue[] = Array.isArray(parsed.issues) ? parsed.issues : [];
+    const errors = aiIssues.filter((i) => i.severity === "error").length;
+    const status: ReviewResult["status"] = errors > 0 ? "invalid" : aiIssues.length > 0 ? "needs_review" : "ready";
+
+    return {
+      status,
+      score,
+      issues: aiIssues,
+      passed: errors === 0,
+    };
+  } catch (err) {
+    console.error("AI achievement review failed:", err);
+    // Fallback — if AI fails, allow it through (consistent with reviewSkillContent's fallback behavior)
+    return {
+      status: "ready",
+      score: 85,
+      issues: [],
+      passed: true,
+    };
+  }
 }

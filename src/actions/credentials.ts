@@ -1,16 +1,15 @@
+// Path: src/actions/credentials.ts
 "use server";
 
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 
 // ── SESSIONS ──────────────────────────────────────────────
-
 export async function confirmSession(sessionId: string, userId: string, role: "teacher" | "learner") {
   const session = await prisma.skillSession.findUnique({ where: { id: sessionId } });
   if (!session) return { error: "Session not found" };
 
   const updateData = role === "teacher" ? { teacherConfirm: true } : { learnerConfirm: true };
-
   const updated = await prisma.skillSession.update({
     where: { id: sessionId },
     data: updateData,
@@ -58,7 +57,6 @@ export async function markSessionCompletedIfDue(sessionId: string) {
 }
 
 // ── CREDENTIALS ───────────────────────────────────────────
-
 export async function getUserCredentials(userId: string) {
   return await prisma.credential.findMany({
     where: { userId },
@@ -104,7 +102,7 @@ export async function issueCredentialFromSession(sessionId: string) {
   });
   if (existing) return { success: true, alreadyIssued: true };
 
-  const learnerFeedback = session.feedbacks.find(f => f.giverId === session.learnerId);
+  const learnerFeedback = session.feedbacks.find((f) => f.giverId === session.learnerId);
   let proficiency = "Beginner";
   if (learnerFeedback) {
     const avg = (learnerFeedback.teachingQuality + learnerFeedback.contentQuality + learnerFeedback.overallExperience) / 3;
@@ -164,6 +162,9 @@ export async function issueTeachingCredential(sessionId: string, avgScore: numbe
 }
 
 // ── ACHIEVEMENTS ──────────────────────────────────────────
+// Credit amounts for logging an achievement, depending on whether proof is attached.
+const ACHIEVEMENT_CREDITS_NO_PROOF = 3;
+const ACHIEVEMENT_CREDITS_WITH_PROOF = 10;
 
 export async function addAchievement(data: {
   userId: string;
@@ -194,6 +195,24 @@ export async function addAchievement(data: {
       verificationStatus: data.certificateData ? "pending" : "unverified",
     },
   });
+
+  // Award credits: more for achievements backed by a certificate/photo proof
+  const hasProof = !!data.certificateData;
+  const creditAmount = hasProof ? ACHIEVEMENT_CREDITS_WITH_PROOF : ACHIEVEMENT_CREDITS_NO_PROOF;
+
+  await prisma.creditTransaction.create({
+    data: {
+      userId: data.userId,
+      amount: creditAmount,
+      type: "earn",
+      reason: hasProof ? "Achievement logged (with proof)" : "Achievement logged",
+    },
+  });
+  await prisma.user.update({
+    where: { id: data.userId },
+    data: { credits: { increment: creditAmount } },
+  });
+
   revalidatePath("/");
   return achievement;
 }
@@ -205,19 +224,25 @@ export async function getUserAchievements(userId: string) {
   });
 }
 
-export async function updateAchievement(id: string, data: {
-  title: string;
-  organization: string;
-  role: string;
-  duration: string;
-  description: string;
-  skillsLearned: string[];
-  category: string;
-  certificateData?: string | null;
-  certificateType?: string | null;
-  certificateName?: string | null;
-}) {
+export async function updateAchievement(
+  id: string,
+  data: {
+    title: string;
+    organization: string;
+    role: string;
+    duration: string;
+    description: string;
+    skillsLearned: string[];
+    category: string;
+    certificateData?: string | null;
+    certificateType?: string | null;
+    certificateName?: string | null;
+  }
+) {
   try {
+    const existing = await prisma.achievement.findUnique({ where: { id } });
+    if (!existing) return { success: false, error: "Achievement not found" };
+
     const updated = await prisma.achievement.update({
       where: { id },
       data: {
@@ -234,6 +259,29 @@ export async function updateAchievement(id: string, data: {
         verificationStatus: data.certificateData ? "pending" : "unverified",
       },
     });
+
+    // Only award the top-up credit if this edit is the first time proof gets
+    // attached (no proof before, proof now). Never re-award if proof already
+    // existed, and never deduct if proof gets removed.
+    const hadProofBefore = !!existing.certificateData;
+    const hasProofNow = !!data.certificateData;
+
+    if (!hadProofBefore && hasProofNow) {
+      const topUp = ACHIEVEMENT_CREDITS_WITH_PROOF - ACHIEVEMENT_CREDITS_NO_PROOF;
+      await prisma.creditTransaction.create({
+        data: {
+          userId: updated.userId,
+          amount: topUp,
+          type: "earn",
+          reason: "Proof added to existing achievement",
+        },
+      });
+      await prisma.user.update({
+        where: { id: updated.userId },
+        data: { credits: { increment: topUp } },
+      });
+    }
+
     revalidatePath("/");
     return { success: true, achievement: updated };
   } catch (error: any) {
@@ -252,10 +300,15 @@ export async function deleteAchievement(id: string) {
 }
 
 // ── FEEDBACK ──────────────────────────────────────────────
-
 const FEEDBACK_FIELDS = [
-  "punctuality", "teachingQuality", "contentQuality", "communication",
-  "patience", "preparedness", "professionalism", "overallExperience",
+  "punctuality",
+  "teachingQuality",
+  "contentQuality",
+  "communication",
+  "patience",
+  "preparedness",
+  "professionalism",
+  "overallExperience",
 ] as const;
 
 export async function submitFeedback(data: {
@@ -312,7 +365,6 @@ export async function submitFeedback(data: {
 
     // Issue credential to the learner
     await issueCredentialFromSession(data.sessionId);
-
     // Issue teaching credential to the teacher
     await issueTeachingCredential(data.sessionId, avgScore);
   }
@@ -352,7 +404,6 @@ export async function getSessionFeedbackStatus(sessionId: string, userId: string
 }
 
 // ── CREDITS ───────────────────────────────────────────────
-
 export async function getUserCredits(userId: string) {
   const user = await prisma.user.findUnique({
     where: { id: userId },
@@ -367,7 +418,6 @@ export async function getUserCredits(userId: string) {
 }
 
 // ── PORTFOLIO STRENGTH SCORE ──────────────────────────────
-
 export async function getPortfolioScore(userId: string) {
   // Executed sequentially to prevent prepared statement collisions over poolers
   const credentials = await prisma.credential.count({ where: { userId } });
@@ -383,24 +433,25 @@ export async function getPortfolioScore(userId: string) {
 
   const avgFeedback =
     feedbacks.length > 0
-      ? feedbacks.reduce((sum, f) => sum + (
-          f.punctuality + f.teachingQuality + f.contentQuality + f.communication +
-          f.patience + f.preparedness + f.professionalism + f.overallExperience
-        ) / 8, 0) / feedbacks.length
+      ? feedbacks.reduce(
+          (sum, f) =>
+            sum +
+            (f.punctuality + f.teachingQuality + f.contentQuality + f.communication + f.patience + f.preparedness + f.professionalism + f.overallExperience) /
+              8,
+          0
+        ) / feedbacks.length
       : 0;
 
   const credScore = Math.min(credentials / 5, 1) * 40;
   const achScore = Math.min(achievements / 5, 1) * 30;
   const sessScore = Math.min(sessions / 10, 1) * 20;
   const feedScore = (Math.min(avgFeedback, 5) / 5) * 10;
-
   const score = Math.round(credScore + achScore + sessScore + feedScore);
 
   return { score, credentials, achievements, sessions, feedbackCount: feedbacks.length };
 }
 
 // ── LEADERBOARD ───────────────────────────────────────────
-
 export async function getLeaderboard() {
   const users = await prisma.user.findMany({
     where: { isOnboarded: true },
@@ -415,33 +466,59 @@ export async function getLeaderboard() {
       achievements: { select: { id: true } },
       feedbackReceived: {
         select: {
-          punctuality: true, teachingQuality: true, contentQuality: true,
-          communication: true, patience: true, preparedness: true,
-          professionalism: true, overallExperience: true,
+          punctuality: true,
+          teachingQuality: true,
+          contentQuality: true,
+          communication: true,
+          patience: true,
+          preparedness: true,
+          professionalism: true,
+          overallExperience: true,
         },
       },
-      teachingSessions: { where: { status: { in: ["confirmed", "completed"] }, scheduledAt: { lt: new Date(Date.now() - 60 * 60 * 1000) } }, select: { id: true } },
-      learningSessions: { where: { status: { in: ["confirmed", "completed"] }, scheduledAt: { lt: new Date(Date.now() - 60 * 60 * 1000) } }, select: { id: true } },
+      teachingSessions: {
+        where: { status: { in: ["confirmed", "completed"] }, scheduledAt: { lt: new Date(Date.now() - 60 * 60 * 1000) } },
+        select: { id: true },
+      },
+      learningSessions: {
+        where: { status: { in: ["confirmed", "completed"] }, scheduledAt: { lt: new Date(Date.now() - 60 * 60 * 1000) } },
+        select: { id: true },
+      },
     },
   });
 
-  const scored = users.map(u => {
+  const scored = users.map((u) => {
     const credentials = u.credentials.length;
     const achievements = u.achievements.length;
     const sessions = u.teachingSessions.length + u.learningSessions.length;
     const feedbacks = u.feedbackReceived;
-    const avgFeedback = feedbacks.length > 0
-      ? feedbacks.reduce((sum, f) => sum + (f.punctuality + f.teachingQuality + f.contentQuality + f.communication + f.patience + f.preparedness + f.professionalism + f.overallExperience) / 8, 0) / feedbacks.length
-      : 0;
+    const avgFeedback =
+      feedbacks.length > 0
+        ? feedbacks.reduce(
+            (sum, f) =>
+              sum +
+              (f.punctuality + f.teachingQuality + f.contentQuality + f.communication + f.patience + f.preparedness + f.professionalism + f.overallExperience) /
+                8,
+            0
+          ) / feedbacks.length
+        : 0;
 
     const score = Math.round(
-      Math.min(credentials / 5, 1) * 40 +
-      Math.min(achievements / 5, 1) * 30 +
-      Math.min(sessions / 10, 1) * 20 +
-      (Math.min(avgFeedback, 5) / 5) * 10
+      Math.min(credentials / 5, 1) * 40 + Math.min(achievements / 5, 1) * 30 + Math.min(sessions / 10, 1) * 20 + (Math.min(avgFeedback, 5) / 5) * 10
     );
 
-    return { id: u.id, name: u.name, school: u.school, classYear: u.classYear, image: u.image, credits: u.credits, score, credentials, achievements, sessions };
+    return {
+      id: u.id,
+      name: u.name,
+      school: u.school,
+      classYear: u.classYear,
+      image: u.image,
+      credits: u.credits,
+      score,
+      credentials,
+      achievements,
+      sessions,
+    };
   });
 
   return scored.sort((a, b) => b.score - a.score).slice(0, 20);
